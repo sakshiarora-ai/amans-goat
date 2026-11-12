@@ -1,0 +1,53 @@
+{
+  "name": "amans-goat",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Aman's GOAT public creator-intelligence dashboard and desktop companion.",
+  "author": "@aman.enlights",
+  "main": "desktop/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "news:update": "node scripts/fetch-news.mjs",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "desktop": "electron desktop/main.cjs",
+    "desktop:build:mac": "electron-builder --mac dmg zip --publish never"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "vite": "latest",
+    "typescript": "latest",
+    "react": "latest",
+    "react-dom": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "electron": "latest",
+    "electron-builder": "latest"
+  },
+  "build": {
+    "appId": "com.amanenlights.goat",
+    "productName": "Aman's GOAT",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "desktop/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "desktop/assets/icon.png",
+      "target": ["dmg", "zip"],
+      "artifactName": "Amans-GOAT-${version}-${arch}.${ext}"
+    },
+    "dmg": {
+      "title": "Aman's GOAT",
+      "artifactName": "Amans-GOAT-${version}-${arch}.${ext}"
+    }
+  }
+}

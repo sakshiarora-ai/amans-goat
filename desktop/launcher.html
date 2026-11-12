@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aman's GOAT Companion</title>
+  <style>
+    :root { color-scheme: dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: transparent; }
+    button { font: inherit; }
+    #compact { width: 92px; height: 92px; display: grid; place-items: center; }
+    .ag-bubble { position: relative; width: 72px; height: 72px; border: 1px solid rgba(255,255,255,.2); border-radius: 50%; background: #111827; color: #91a4ff; box-shadow: 0 18px 42px rgba(7,12,23,.38); font: 800 21px/1 Georgia, serif; cursor: pointer; }
+    .ag-bubble::after { content: ''; position: absolute; right: 3px; top: 4px; width: 11px; height: 11px; border: 3px solid #111827; border-radius: 50%; background: #67d8a2; }
+    #panel { width: 100%; height: 100%; display: none; flex-direction: column; padding: 18px; border: 1px solid rgba(255,255,255,.13); border-radius: 24px; background: rgba(15,21,34,.98); color: #eef2ff; box-shadow: 0 26px 80px rgba(4,8,18,.48); }
+    .panel-head { display: flex; align-items: center; gap: 12px; padding: 2px 2px 16px; }
+    .mini-mark { width: 40px; height: 40px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 50%; background: #91a4ff; color: #101727; font: 800 13px Georgia, serif; }
+    .panel-head strong, .panel-head small { display: block; }
+    .panel-head strong { font-size: 15px; }
+    .panel-head small { margin-top: 3px; color: #9ca8bc; font-size: 10px; }
+    .close { margin-left: auto; width: 30px; height: 30px; border: 0; border-radius: 50%; background: rgba(255,255,255,.07); color: #d9e0ef; cursor: pointer; }
+    nav { display: grid; gap: 7px; }
+    .route { display: grid; grid-template-columns: 36px 1fr 14px; align-items: center; gap: 10px; min-height: 61px; padding: 9px 11px; border: 1px solid rgba(255,255,255,.08); border-radius: 14px; background: rgba(255,255,255,.035); color: #eef2ff; text-align: left; cursor: pointer; }
+    .route:hover { border-color: rgba(145,164,255,.55); background: rgba(145,164,255,.1); }
+    .route-icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 11px; background: #222d48; color: #a9b7ff; font-weight: 800; }
+    .route b, .route small { display: block; }
+    .route b { margin-bottom: 3px; font-size: 12px; }
+    .route small { color: #9ca8bc; font-size: 9px; line-height: 1.25; }
+    .arrow { color: #91a4ff; }
+    .panel-footer { display: flex; justify-content: space-between; align-items: center; margin-top: auto; padding: 13px 4px 1px; }
+    .panel-footer button { border: 0; background: transparent; color: #9ca8bc; font-size: 9px; cursor: pointer; }
+    .panel-footer .open { color: #a9b7ff; font-weight: 800; }
+  </style>
+</head>
+<body>
+  <main id="compact"><button class="ag-bubble" id="expand" aria-label="Open Aman's GOAT quick navigation">AG</button></main>
+  <section id="panel" aria-label="Aman's GOAT quick navigation">
+    <header class="panel-head"><span class="mini-mark">AG</span><div><strong>Aman's GOAT</strong><small>Choose where to continue</small></div><button class="close" id="collapse" aria-label="Close quick navigation">×</button></header>
+    <nav>
+      <button class="route" data-route="today"><span class="route-icon">⌂</span><span><b>My Feed</b><small>Review today’s intelligence brief.</small></span><span class="arrow">›</span></button>
+      <button class="route" data-route="tasks"><span class="route-icon">✓</span><span><b>To-Dos</b><small>Open your task and publishing checklist.</small></span><span class="arrow">›</span></button>
+      <button class="route" data-route="research"><span class="route-icon">≡</span><span><b>News Radar</b><small>See the newest high-potential stories.</small></span><span class="arrow">›</span></button>
+      <button class="route" data-route="watch"><span class="route-icon">@</span><span><b>Creator’s Intel</b><small>Track creator activity and opportunities.</small></span><span class="arrow">›</span></button>
+      <button class="route" data-route="studio"><span class="route-icon">✦</span><span><b>Content Studio</b><small>Turn a topic into a Reel or carousel.</small></span><span class="arrow">›</span></button>
+    </nav>
+    <footer class="panel-footer"><button id="quit">Quit companion</button><button class="open" id="open-home">Open full window ↗</button></footer>
+  </section>
+  <script>
+    const compact = document.getElementById('compact');
+    const panel = document.getElementById('panel');
+    function render(expanded) {
+      compact.style.display = expanded ? 'none' : 'grid';
+      panel.style.display = expanded ? 'flex' : 'none';
+    }
+    document.getElementById('expand').addEventListener('click', () => { render(true); window.goatDesktop.toggle(true); });
+    document.getElementById('collapse').addEventListener('click', () => { render(false); window.goatDesktop.toggle(false); });
+    document.getElementById('open-home').addEventListener('click', () => window.goatDesktop.openHome());
+    document.getElementById('quit').addEventListener('click', () => window.goatDesktop.quit());
+    document.querySelectorAll('[data-route]').forEach((button) => button.addEventListener('click', () => window.goatDesktop.openRoute(button.dataset.route)));
+    window.goatDesktop.onState(render);
+  </script>
+</body>
+</html>
+
