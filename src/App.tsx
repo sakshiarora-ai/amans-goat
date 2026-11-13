@@ -94,6 +94,7 @@ export default function Home() {
   const [dateLabel, setDateLabel] = useState('WEDNESDAY · 11 NOVEMBER');
   const [format, setFormat] = useState('Reel');
   const [feedStoryIndex, setFeedStoryIndex] = useState(0);
+  const [carouselDragStart, setCarouselDragStart] = useState<number | null>(null);
   const [selectedTopic, setSelectedTopic] = useState(2);
   const [selectedLiveTopic, setSelectedLiveTopic] = useState<LiveReport | null>(null);
   const [activeRegion, setActiveRegion] = useState(0);
@@ -168,6 +169,16 @@ export default function Home() {
   const activeStudioSource = selectedLiveTopic?.source || topics[selectedTopic].source;
 
   function toggleTask(id: number) { setTasks((all) => all.map((task) => task.id === id ? { ...task, done: !task.done } : task)); }
+  function moveFeedStory(direction: number) {
+    if (!topFeedStories.length) return;
+    setFeedStoryIndex((current) => (current + direction + topFeedStories.length) % topFeedStories.length);
+  }
+  function finishCarouselDrag(clientX: number) {
+    if (carouselDragStart === null) return;
+    const distance = clientX - carouselDragStart;
+    if (Math.abs(distance) > 45) moveFeedStory(distance < 0 ? 1 : -1);
+    setCarouselDragStart(null);
+  }
   function isSaved(report: LiveReport) { return tasks.some((task) => task.sourceId === report.id); }
   function toggleSavedReport(report: LiveReport) {
     if (isSaved(report)) {
@@ -271,10 +282,10 @@ export default function Home() {
 
             <section className="top-news-dashboard">
               <header><div><span className="page-kicker">TOP 5 OPPORTUNITIES</span><h3>Stories worth your attention.</h3></div><div><button onClick={loadLiveReports}>{liveLoading ? 'Updating…' : 'Refresh ↻'}</button><button className="full-radar-button" onClick={() => setTab('research')}>Full News Radar <span>→</span></button></div></header>
-              {activeFeedStory ? <article className="news-carousel-card">
+              {activeFeedStory ? <article className={`news-carousel-card ${carouselDragStart !== null ? 'dragging' : ''}`} tabIndex={0} aria-label="Top news carousel. Swipe or use arrow keys to change story." onPointerDown={(event) => { if (!(event.target as HTMLElement).closest('button, a')) setCarouselDragStart(event.clientX); }} onPointerUp={(event) => finishCarouselDrag(event.clientX)} onPointerCancel={() => setCarouselDragStart(null)} onKeyDown={(event) => { if (event.key === 'ArrowLeft') moveFeedStory(-1); if (event.key === 'ArrowRight') moveFeedStory(1); }}>
                 <div className="news-carousel-image">{activeFeedStory.imageUrl ? <img src={activeFeedStory.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <span>{activeFeedStory.category.slice(0, 2).toUpperCase()}</span>}<div><small>RANKED OPPORTUNITY</small><strong>0{feedStoryIndex + 1}</strong></div></div>
-                <div className="news-carousel-copy"><div className="carousel-meta"><span>{activeFeedStory.category}</span><em>{timeAgo(activeFeedStory.publishedAt)}</em><b>{activeFeedStory.reachScore || 7}/10 REACH</b></div><h3>{activeFeedStory.title}</h3><p>{activeFeedStory.whyItCanTravel || 'A timely development with a clear explanation opportunity for your audience.'}</p><div className="carousel-source"><span>Source</span><strong>{activeFeedStory.source}</strong></div><div className="carousel-actions"><button className={`favorite-button ${isSaved(activeFeedStory) ? 'active' : ''}`} onClick={() => toggleSavedReport(activeFeedStory)}>{isSaved(activeFeedStory) ? '♥ Saved to planner' : '♡ Save to planner'}</button><button className="reel-button" onClick={() => buildReel(activeFeedStory)}>Build this Reel ✦</button><a href={activeFeedStory.url} target="_blank" rel="noreferrer">Read source ↗</a></div></div>
-                <div className="carousel-controls"><button onClick={() => setFeedStoryIndex((feedStoryIndex + topFeedStories.length - 1) % topFeedStories.length)} aria-label="Previous top story">←</button><div>{topFeedStories.map((story, index) => <button key={story.id} className={feedStoryIndex === index ? 'active' : ''} onClick={() => setFeedStoryIndex(index)} aria-label={`Show top story ${index + 1}`} />)}</div><span>{feedStoryIndex + 1} / {topFeedStories.length}</span><button onClick={() => setFeedStoryIndex((feedStoryIndex + 1) % topFeedStories.length)} aria-label="Next top story">→</button></div>
+                <div className="news-carousel-copy"><div className="carousel-meta"><span>{activeFeedStory.category}</span><em>{timeAgo(activeFeedStory.publishedAt)}</em><b>{activeFeedStory.reachScore || 7}/10 REACH</b><button className={`carousel-heart ${isSaved(activeFeedStory) ? 'active' : ''}`} onClick={() => toggleSavedReport(activeFeedStory)} aria-label={isSaved(activeFeedStory) ? 'Remove this story from planner' : 'Save this story to planner'} title={isSaved(activeFeedStory) ? 'Saved to planner' : 'Save to planner'}>{isSaved(activeFeedStory) ? '♥' : '♡'}</button></div><h3>{activeFeedStory.title}</h3><p>{activeFeedStory.whyItCanTravel || 'A timely development with a clear explanation opportunity for your audience.'}</p><div className="carousel-source"><span>Source</span><strong>{activeFeedStory.source}</strong></div><div className="carousel-actions"><button className="reel-button" onClick={() => buildReel(activeFeedStory)}>Build this Reel ✦</button><a href={activeFeedStory.url} target="_blank" rel="noreferrer">Read source ↗</a><small>Drag or swipe to see the next story</small></div></div>
+                <div className="carousel-controls"><button onClick={() => moveFeedStory(-1)} aria-label="Previous top story">←</button><div>{topFeedStories.map((story, index) => <button key={story.id} className={feedStoryIndex === index ? 'active' : ''} onClick={() => setFeedStoryIndex(index)} aria-label={`Show top story ${index + 1}`} />)}</div><span>{feedStoryIndex + 1} / {topFeedStories.length}</span><button onClick={() => moveFeedStory(1)} aria-label="Next top story">→</button></div>
               </article> : <div className="live-feed-warning"><span>{liveLoading ? 'SCANNING LIVE SOURCES' : 'LIVE FEED UNAVAILABLE'}</span><h4>{liveLoading ? 'Building your dashboard…' : 'No current report could be verified.'}</h4><p>{liveLoading ? 'The top opportunities will appear in a few seconds.' : 'Try refreshing the hourly intelligence feed.'}</p>{liveError && <button onClick={loadLiveReports}>Try live refresh ↻</button>}</div>}
             </section>
 
