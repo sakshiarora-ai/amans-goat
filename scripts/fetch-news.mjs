@@ -14,6 +14,18 @@ const feeds = [
 ].map(([query, category, signal]) => ({ query, category, signal }));
 
 const highReachTerms = ['india', 'modi', 'election', 'supreme court', 'china', 'pakistan', 'trump', 'war', 'ai', 'economy', 'army', 'parliament', 'protest', 'ban', 'launch', 'summit'];
+const referenceStopWords = new Set(['about', 'after', 'against', 'breaking', 'current', 'explained', 'from', 'global', 'government', 'india', 'indian', 'into', 'latest', 'leader', 'national', 'news', 'over', 'politics', 'president', 'report', 'reports', 'that', 'their', 'this', 'today', 'video', 'viral', 'with']);
+
+function referenceWords(title = '') {
+  return new Set(title.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter((word) => word.length > 4 && !referenceStopWords.has(word)));
+}
+
+function stronglyMatches(title, referenceTitle) {
+  const titleWords = referenceWords(title);
+  const referenceSet = referenceWords(referenceTitle);
+  const shared = [...titleWords].filter((word) => referenceSet.has(word));
+  return shared.length >= 2;
+}
 
 function reachScore(title, signal, timestamp) {
   const lower = title.toLowerCase();
@@ -50,8 +62,8 @@ function parseFeed(xml, feed) {
     const publishedAt = field(item, 'pubDate');
     const timestamp = Date.parse(publishedAt) || 0;
     const score = reachScore(title, feed.signal, timestamp);
-    return { id: `${publishedAt}-${title}`, title, source, url: field(item, 'link'), imageUrl: '', category: feed.category, signal: feed.signal, publishedAt, timestamp, reachScore: score, whyItCanTravel: reason(feed.signal, score) };
-  });
+    return { id: `${publishedAt}-${title}`, title, source, url: field(item, 'link'), imageUrl: '', category: feed.category, signal: feed.signal, publishedAt, timestamp, reachScore: score, whyItCanTravel: reason(feed.signal, score), relatedTo: feed.relatedTo };
+  }).filter((report) => !feed.referenceTitle || stronglyMatches(report.title, feed.referenceTitle));
 }
 
 function parseTrends(xml) {
@@ -84,13 +96,29 @@ for (let index = 0; index < feeds.length; index += 4) {
   batches.push(...await Promise.all(feeds.slice(index, index + 4).map(fetchFeed)));
 }
 
+const earlyNews = batches.flat().filter((report) => report.signal === 'news').sort((a, b) => b.timestamp - a.timestamp);
+const referenceFeeds = earlyNews.slice(0, 10).map((report) => {
+  const terms = [...referenceWords(report.title)].slice(0, 5);
+  return {
+    query: `${terms.join(' ')} (site:youtube.com/watch OR site:youtube.com/shorts OR site:instagram.com/reel) when:14d`,
+    category: 'Video reference',
+    signal: 'video',
+    relatedTo: report.id,
+    referenceTitle: report.title,
+  };
+}).filter((feed) => referenceWords(feed.referenceTitle).size >= 2);
+for (let index = 0; index < referenceFeeds.length; index += 4) {
+  batches.push(...await Promise.all(referenceFeeds.slice(index, index + 4).map(fetchFeed)));
+}
+
 const seen = new Set();
-const reports = batches.flat().sort((a, b) => b.timestamp - a.timestamp).filter((report) => {
+const deduplicated = batches.flat().sort((a, b) => b.timestamp - a.timestamp).filter((report) => {
   const key = report.title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
   if (!key || seen.has(key)) return false;
   seen.add(key);
   return true;
-}).slice(0, 60).map(({ timestamp: _timestamp, ...report }) => report);
+});
+const reports = [...deduplicated.filter((report) => report.signal !== 'video').slice(0, 40), ...deduplicated.filter((report) => report.signal === 'video').slice(0, 30)].map(({ timestamp: _timestamp, ...report }) => report);
 
 await mkdir(new URL('../public/data/', import.meta.url), { recursive: true });
 await writeFile(new URL('../public/data/news.json', import.meta.url), `${JSON.stringify({ reports, updatedAt: new Date().toISOString(), live: reports.length > 0 }, null, 2)}\n`);

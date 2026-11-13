@@ -2,9 +2,9 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
-type Task = { id: number; title: string; done: boolean };
+type Task = { id: number; title: string; done: boolean; sourceId?: string; sourceUrl?: string };
 type Topic = { category: string; title: string; summary: string; read: string; source: string; url: string; angle: string };
-type LiveReport = { id: string; title: string; source: string; url: string; imageUrl?: string; category: string; signal?: 'news' | 'creator' | 'event' | 'x' | 'video'; publishedAt: string; reachScore?: number; whyItCanTravel?: string };
+type LiveReport = { id: string; title: string; source: string; url: string; imageUrl?: string; category: string; signal?: 'news' | 'creator' | 'event' | 'x' | 'video'; publishedAt: string; reachScore?: number; whyItCanTravel?: string; relatedTo?: string };
 type CreatorProfile = { name: string; handle: string; url?: string; status: 'verified' | 'confirm'; lane: string; pattern: string; sourceSignals: string; opportunity: string };
 
 const defaultTasks: Task[] = [
@@ -55,7 +55,7 @@ const creatorCopy: Record<string, { hook: string; body: string[]; cta: string }>
   Stories: { hook: 'Quick poll: Is India already a global middle power?', body: ['Story 1 · The one-line context', 'Story 2 · Three signals to watch', 'Story 3 · Audience poll: Yes / Not yet', 'Story 4 · Reveal + tomorrow’s topic'], cta: 'Reply with the country relationship you want decoded next.' },
 };
 
-const topicStopWords = new Set(['about', 'after', 'against', 'from', 'global', 'government', 'india', 'indian', 'into', 'leader', 'national', 'news', 'over', 'performance', 'president', 'questions', 'report', 'that', 'their', 'this', 'with']);
+const topicStopWords = new Set(['about', 'after', 'against', 'breaking', 'current', 'explained', 'from', 'global', 'government', 'india', 'indian', 'into', 'latest', 'leader', 'national', 'news', 'over', 'performance', 'politics', 'president', 'questions', 'report', 'reports', 'that', 'their', 'this', 'today', 'video', 'viral', 'with']);
 function topicWords(title: string) {
   return new Set(title.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter((word) => word.length > 4 && !topicStopWords.has(word)));
 }
@@ -65,9 +65,22 @@ function isRelatedTopic(a: LiveReport, b: LiveReport) {
   return shared.length >= 2;
 }
 function isRelatedVideo(topic: LiveReport, video: LiveReport) {
+  if (video.relatedTo === topic.id) return true;
   const topicSet = topicWords(topic.title);
-  const shared = [...topicWords(video.title)].filter((word) => topicSet.has(word));
-  return shared.length >= 2 || shared.some((word) => word.length >= 8);
+  const videoSet = topicWords(video.title);
+  const shared = [...videoSet].filter((word) => topicSet.has(word));
+  if (shared.length < 2) return false;
+  return shared.length / Math.max(1, Math.min(topicSet.size, videoSet.size)) >= 0.45;
+}
+
+function storyCopy(report: LiveReport, format: string) {
+  const title = report.title.replace(/\s+/g, ' ').trim();
+  const shortTitle = title.length > 92 ? `${title.slice(0, 89)}…` : title;
+  const sharedCta = `What matters most here—the immediate headline or what happens next? Tell ${channelHandle}.`;
+  if (format === 'Carousel') return { hook: `${shortTitle} — understood in 6 slides`, body: ['01 · What has been confirmed', '02 · Who is directly affected', '03 · The missing background', '04 · Why this matters for India', '05 · What remains uncertain', '06 · The next signal to watch'], cta: 'Save this explainer and share it with someone following the story.' };
+  if (format === 'Caption') return { hook: `The headline: ${shortTitle}`, body: [`Start with the verified development, then explain the consequence without overstating what is known. Source the claim to ${report.source}, separate reporting from analysis, and end with the next question viewers should watch.`], cta: sharedCta };
+  if (format === 'Stories') return { hook: `Have you seen this? ${shortTitle}`, body: ['Story 1 · State the confirmed development', 'Story 2 · Add one piece of missing context', 'Story 3 · Explain the India consequence', 'Story 4 · Poll: important shift or temporary noise?'], cta: 'Reply with the part you want decoded in the full Reel.' };
+  return { hook: `${shortTitle}—but here’s what the headline leaves out.`, body: [`0–05 sec · Open with the verified development from ${report.source}.`, '05–15 sec · Explain the background in one plain-language sentence.', `15–30 sec · Show why this ${report.category.toLowerCase()} story matters for India or the audience.`, '30–40 sec · Separate what is confirmed from analysis and name the next signal to watch.'], cta: sharedCta };
 }
 
 export default function Home() {
@@ -81,6 +94,7 @@ export default function Home() {
   const [dateLabel, setDateLabel] = useState('WEDNESDAY · 11 NOVEMBER');
   const [format, setFormat] = useState('Reel');
   const [selectedTopic, setSelectedTopic] = useState(2);
+  const [selectedLiveTopic, setSelectedLiveTopic] = useState<LiveReport | null>(null);
   const [activeRegion, setActiveRegion] = useState(0);
   const [liveReports, setLiveReports] = useState<LiveReport[]>([]);
   const [liveUpdatedAt, setLiveUpdatedAt] = useState('');
@@ -143,8 +157,30 @@ export default function Home() {
   const radarReports = useMemo(() => filter === 'All' ? liveReports : liveReports.filter((report) => report.category === filter), [filter, liveReports]);
   const complete = tasks.filter((task) => task.done).length;
   const percent = tasks.length ? Math.round((complete / tasks.length) * 100) : 0;
+  const activeStudioCopy = selectedLiveTopic ? storyCopy(selectedLiveTopic, format) : creatorCopy[format];
+  const activeStudioTitle = selectedLiveTopic?.title || topics[selectedTopic].title;
+  const activeStudioSource = selectedLiveTopic?.source || topics[selectedTopic].source;
 
   function toggleTask(id: number) { setTasks((all) => all.map((task) => task.id === id ? { ...task, done: !task.done } : task)); }
+  function isSaved(report: LiveReport) { return tasks.some((task) => task.sourceId === report.id); }
+  function toggleSavedReport(report: LiveReport) {
+    if (isSaved(report)) {
+      setTasks((all) => all.filter((task) => task.sourceId !== report.id));
+      setToast('Removed from your To-Do planner');
+    } else {
+      setTasks((all) => [...all, { id: Date.now(), title: `Create content: ${report.title}`, done: false, sourceId: report.id, sourceUrl: report.url }]);
+      setToast('Saved to your To-Do planner');
+    }
+    window.setTimeout(() => setToast(''), 2200);
+  }
+  function buildReel(report: LiveReport) {
+    setSelectedLiveTopic(report);
+    setFormat('Reel');
+    setTab('studio');
+    setAssistantOpen(false);
+    setToast('Story-specific Reel ideas are ready');
+    window.setTimeout(() => setToast(''), 2200);
+  }
   async function loadLiveReports() {
     setLiveLoading(true);
     try {
@@ -225,7 +261,7 @@ export default function Home() {
                 const related = liveReports.filter((report) => report.id !== story.id && isRelatedTopic(story, report));
                 const creatorMatch = related.find((report) => report.signal === 'creator');
                 const reachLeader = [...related, story].sort((a, b) => (b.reachScore || 0) - (a.reachScore || 0))[0];
-                return <article className="story live-story" key={story.id}><span className="story-index">{String(index + 1).padStart(2, '0')}</span><a className="story-image" aria-label={`View source for ${story.title}`} href={story.url} target="_blank" rel="noreferrer">{story.imageUrl ? <img src={story.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <span>{story.category.slice(0, 2).toUpperCase()}</span>}</a><div className="story-copy"><span className="story-tag">{story.category} · {timeAgo(story.publishedAt)}</span><h4>{story.title}</h4><p>{story.source} · Added to the hourly radar</p><div className="story-intel"><span>{related.length + 1} reports tracked</span>{creatorMatch && <a href={creatorMatch.url} target="_blank" rel="noreferrer">Creator match ↗</a>}<a href={reachLeader.url} target="_blank" rel="noreferrer">Reach signal {reachLeader.reachScore || 6}/10 ↗</a></div></div><a className="story-open" aria-label={`Read ${story.title}`} href={story.url} target="_blank" rel="noreferrer">↗</a></article>;
+                return <article className="story live-story" key={story.id}><span className="story-index">{String(index + 1).padStart(2, '0')}</span><a className="story-image" aria-label={`View source for ${story.title}`} href={story.url} target="_blank" rel="noreferrer">{story.imageUrl ? <img src={story.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <span>{story.category.slice(0, 2).toUpperCase()}</span>}</a><div className="story-copy"><span className="story-tag">{story.category} · {timeAgo(story.publishedAt)}</span><h4>{story.title}</h4><p>{story.source} · Added to the hourly radar</p><div className="story-intel"><span>{related.length + 1} reports tracked</span>{creatorMatch && <a href={creatorMatch.url} target="_blank" rel="noreferrer">Creator match ↗</a>}<a href={reachLeader.url} target="_blank" rel="noreferrer">Reach signal {reachLeader.reachScore || 6}/10 ↗</a></div></div><div className="story-actions"><button className={`favorite-button ${isSaved(story) ? 'active' : ''}`} onClick={() => toggleSavedReport(story)} aria-label={isSaved(story) ? `Remove ${story.title} from planner` : `Save ${story.title} to planner`} title={isSaved(story) ? 'Saved to To-Dos' : 'Save to To-Dos'}>{isSaved(story) ? '♥' : '♡'}</button><button className="reel-button" onClick={() => buildReel(story)}>Build Reel</button><a className="story-open" aria-label={`Read ${story.title}`} href={story.url} target="_blank" rel="noreferrer">↗</a></div></article>;
               }) : <div className="live-feed-warning"><span>{liveLoading ? 'SCANNING LIVE SOURCES' : 'LIVE FEED UNAVAILABLE'}</span><h4>{liveLoading ? 'Gathering the newest reports…' : 'Old stories have been hidden.'}</h4><p>{liveLoading ? 'This normally takes a few seconds.' : "Aman's GOAT could not verify a fresh report, so it will not show yesterday’s fallback. Try Refresh now."}</p>{liveError && <button onClick={loadLiveReports}>Try live refresh ↻</button>}</div>}</div>
             </section>
             <aside className="side-column">
@@ -240,7 +276,7 @@ export default function Home() {
           <section className="planner-view">
             <div className="planner-intro"><span className="page-kicker">TODAY'S PLAN</span><h2>Make progress visible.</h2><p>Your tasks are saved on this device, so the list will still be here when you return.</p></div>
             <form className="add-task" onSubmit={addTask}><input value={newTask} onChange={(event) => setNewTask(event.target.value)} placeholder="Add a task for today…" aria-label="New task" /><button type="submit">Add task</button></form>
-            <div className="planner-list">{tasks.map((task) => <div className={`planner-task ${task.done ? 'done' : ''}`} key={task.id}><input type="checkbox" checked={task.done} onChange={() => toggleTask(task.id)} aria-label={`Mark ${task.title} complete`} /><strong>{task.title}</strong><button onClick={() => setTasks((all) => all.filter((item) => item.id !== task.id))} aria-label={`Delete ${task.title}`}>Remove</button></div>)}</div>
+            <div className="planner-list">{tasks.map((task) => <div className={`planner-task ${task.done ? 'done' : ''}`} key={task.id}><input type="checkbox" checked={task.done} onChange={() => toggleTask(task.id)} aria-label={`Mark ${task.title} complete`} /><div><strong>{task.title}</strong>{task.sourceUrl && <a className="task-source" href={task.sourceUrl} target="_blank" rel="noreferrer">Open saved news source ↗</a>}</div><button onClick={() => setTasks((all) => all.filter((item) => item.id !== task.id))} aria-label={`Delete ${task.title}`}>Remove</button></div>)}</div>
           </section>
         )}
 
@@ -254,7 +290,7 @@ export default function Home() {
                 const videoMatches = videoReports.filter((video) => isRelatedVideo(report, video)).sort((a, b) => (b.reachScore || 0) - (a.reachScore || 0) || Date.parse(b.publishedAt) - Date.parse(a.publishedAt)).slice(0, 3);
                 return <article className="radar-news-card" key={report.id}>
                 <div className="radar-image">{report.imageUrl ? <img src={report.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <span>{report.category.slice(0, 2).toUpperCase()}</span>}</div>
-                <div className="radar-copy"><div className="radar-meta"><span>{report.category}</span><em>{timeAgo(report.publishedAt)}</em><b>{report.reachScore || 7}/10 REACH</b></div><h3>{report.title}</h3><p>{report.whyItCanTravel || 'A timely report with a useful explanation opportunity for your audience.'}</p>{videoMatches.length > 0 && <div className="video-refs"><span>TOP VIDEO REFERENCES</span><div>{videoMatches.map((video, videoIndex) => <a href={video.url} target="_blank" rel="noreferrer" key={video.id}><b>▶ {videoIndex + 1}</b><span>{video.title}</span><em>{video.category} · {video.reachScore || 7}/10 signal</em></a>)}</div></div>}<footer><span><strong>{report.source}</strong><small>Source image and report reference</small></span><a href={report.url} target="_blank" rel="noreferrer">Open full report ↗</a></footer></div>
+                <div className="radar-copy"><div className="radar-meta"><span>{report.category}</span><em>{timeAgo(report.publishedAt)}</em><b>{report.reachScore || 7}/10 REACH</b></div><h3>{report.title}</h3><p>{report.whyItCanTravel || 'A timely report with a useful explanation opportunity for your audience.'}</p>{videoMatches.length > 0 ? <div className="video-refs"><span>VERIFIED SAME-TOPIC VIDEO REFERENCES</span><div>{videoMatches.map((video, videoIndex) => <a href={video.url} target="_blank" rel="noreferrer" key={video.id}><b>▶ {videoIndex + 1}</b><span>{video.title}</span><em>{video.source} · Google News indexed · {video.reachScore || 7}/10 signal</em></a>)}</div></div> : <p className="video-ref-note">No closely matched video reference is verified for this story yet.</p>}<footer><span><strong>{report.source}</strong><small>Source image and report reference</small></span><div className="radar-actions"><button className={`favorite-button ${isSaved(report) ? 'active' : ''}`} onClick={() => toggleSavedReport(report)} aria-label={isSaved(report) ? `Remove ${report.title} from planner` : `Save ${report.title} to planner`}>{isSaved(report) ? '♥ Saved' : '♡ Save'}</button><button className="reel-button" onClick={() => buildReel(report)}>Build Reel</button><a href={report.url} target="_blank" rel="noreferrer">Open report ↗</a></div></footer></div>
               </article>})}</div>
             </section>
           </section>
@@ -301,17 +337,17 @@ export default function Home() {
               <aside className="signal-detail"><div><span>ACTIVE SIGNAL · {worldSignals[activeRegion].level}</span><em>0{activeRegion + 1}</em></div><h3>{worldSignals[activeRegion].title}</h3><p>{worldSignals[activeRegion].note}</p><button onClick={() => { setSelectedTopic(Math.min(activeRegion, 3)); setFormat('Reel'); }}>Build a Reel from this →</button></aside>
             </section>
             <div className="studio-layout">
-              <aside className="topic-picker"><div className="studio-label">CHOOSE TODAY’S SIGNAL</div>{topics.slice(0, 6).map((topic, index) => <button className={selectedTopic === index ? 'active' : ''} onClick={() => setSelectedTopic(index)} key={topic.title}><span>{String(index + 1).padStart(2, '0')}</span><strong>{topic.title}</strong><small>{topic.category}</small></button>)}</aside>
+              <aside className="topic-picker"><div className="studio-label">CHOOSE TODAY’S SIGNAL</div>{selectedLiveTopic && <button className="active studio-live-topic" onClick={() => setFormat('Reel')}><span>LIVE</span><strong>{selectedLiveTopic.title}</strong><small>{selectedLiveTopic.category} · {selectedLiveTopic.source}</small></button>}{topics.slice(0, 6).map((topic, index) => <button className={!selectedLiveTopic && selectedTopic === index ? 'active' : ''} onClick={() => { setSelectedLiveTopic(null); setSelectedTopic(index); }} key={topic.title}><span>{String(index + 1).padStart(2, '0')}</span><strong>{topic.title}</strong><small>{topic.category}</small></button>)}</aside>
               <section className="creator-canvas">
                 <div className="format-tabs">{formats.map((item) => <button className={format === item ? 'active' : ''} onClick={() => setFormat(item)} key={item}>{item}</button>)}</div>
                 <div className="post-preview">
                   <div className="post-top"><span className="ig-avatar">A</span><div><strong>{channelHandle}</strong><small>Geopolitics, made clear</small></div><em>{format.toUpperCase()}</em></div>
-                  <div className="hook-card"><span>HOOK</span><h3>{creatorCopy[format].hook}</h3></div>
-                  <div className="script-block"><span>{format === 'Carousel' ? 'SLIDE PLAN' : format === 'Reel' ? 'SCRIPT BEATS' : 'DRAFT'}</span>{creatorCopy[format].body.map((line, index) => <p key={line}><b>{String(index + 1).padStart(2, '0')}</b>{line}</p>)}</div>
-                  <div className="cta-block"><span>CALL TO ACTION</span><p>{creatorCopy[format].cta}</p></div>
+                  <div className="hook-card"><span>HOOK · {selectedLiveTopic ? 'BUILT FROM LIVE NEWS' : 'EDITORIAL IDEA'}</span><h3>{activeStudioCopy.hook}</h3></div>
+                  <div className="script-block"><span>{format === 'Carousel' ? 'SLIDE PLAN' : format === 'Reel' ? 'SCRIPT BEATS' : 'DRAFT'}</span>{activeStudioCopy.body.map((line, index) => <p key={`${line}-${index}`}><b>{String(index + 1).padStart(2, '0')}</b>{line}</p>)}</div>
+                  <div className="cta-block"><span>CALL TO ACTION</span><p>{activeStudioCopy.cta}</p></div>
                 </div>
               </section>
-              <aside className="creator-tools"><div className="studio-label">CREATOR CHECK</div><div className="check-row"><span>Strong hook</span><b>Excellent</b></div><div className="check-row"><span>Clarity</span><b>High</b></div><div className="check-row"><span>Save potential</span><b>8.2 / 10</b></div><div className="hashtag-box"><span>HASHTAG SET</span><p>#IndianPolitics #Geopolitics #IndiaExplained #CurrentAffairs #NewsReel</p></div><button className="copy-button" onClick={() => { navigator.clipboard?.writeText(`${creatorCopy[format].hook}\n\n${creatorCopy[format].body.join('\n')}\n\n${creatorCopy[format].cta}`); setToast(`${format} draft copied`); window.setTimeout(() => setToast(''), 2200); }}>Copy full draft</button><button className="save-button" onClick={() => { setTasks((all) => [...all, { id: Date.now(), title: `Publish ${format}: ${topics[selectedTopic].title}`, done: false }]); setToast('Added to your content plan'); window.setTimeout(() => setToast(''), 2200); }}>Add to content plan</button><small>Built from: {topics[selectedTopic].source}</small></aside>
+              <aside className="creator-tools"><div className="studio-label">CREATOR CHECK</div><div className="check-row"><span>Strong hook</span><b>Excellent</b></div><div className="check-row"><span>Clarity</span><b>High</b></div><div className="check-row"><span>Save potential</span><b>8.2 / 10</b></div><div className="hashtag-box"><span>HASHTAG SET</span><p>#IndianPolitics #Geopolitics #IndiaExplained #CurrentAffairs #NewsReel</p></div><button className="copy-button" onClick={() => { navigator.clipboard?.writeText(`${activeStudioCopy.hook}\n\n${activeStudioCopy.body.join('\n')}\n\n${activeStudioCopy.cta}`); setToast(`${format} draft copied`); window.setTimeout(() => setToast(''), 2200); }}>Copy full draft</button><button className="save-button" onClick={() => { setTasks((all) => [...all, { id: Date.now(), title: `Publish ${format}: ${activeStudioTitle}`, done: false, sourceId: selectedLiveTopic?.id, sourceUrl: selectedLiveTopic?.url }]); setToast('Added to your content plan'); window.setTimeout(() => setToast(''), 2200); }}>Add to content plan</button><small>Built from: {activeStudioSource}</small>{selectedLiveTopic && <a className="studio-source-link" href={selectedLiveTopic.url} target="_blank" rel="noreferrer">Review original report ↗</a>}</aside>
             </div>
           </section>
         )}
