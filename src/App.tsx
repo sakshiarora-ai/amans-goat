@@ -93,6 +93,7 @@ export default function Home() {
   const [toast, setToast] = useState('');
   const [dateLabel, setDateLabel] = useState('WEDNESDAY · 11 NOVEMBER');
   const [format, setFormat] = useState('Reel');
+  const [feedStoryIndex, setFeedStoryIndex] = useState(0);
   const [selectedTopic, setSelectedTopic] = useState(2);
   const [selectedLiveTopic, setSelectedLiveTopic] = useState<LiveReport | null>(null);
   const [activeRegion, setActiveRegion] = useState(0);
@@ -157,6 +158,11 @@ export default function Home() {
   const radarReports = useMemo(() => filter === 'All' ? liveReports : liveReports.filter((report) => report.category === filter), [filter, liveReports]);
   const complete = tasks.filter((task) => task.done).length;
   const percent = tasks.length ? Math.round((complete / tasks.length) * 100) : 0;
+  const pendingTasks = tasks.length - complete;
+  const savedNewsCount = tasks.filter((task) => task.sourceId).length;
+  const topReelReach = videoReports.reduce((top, report) => Math.max(top, report.reachScore || 0), 0);
+  const topFeedStories = myOpportunities.slice(0, 5);
+  const activeFeedStory = topFeedStories[feedStoryIndex] || null;
   const activeStudioCopy = selectedLiveTopic ? storyCopy(selectedLiveTopic, format) : creatorCopy[format];
   const activeStudioTitle = selectedLiveTopic?.title || topics[selectedTopic].title;
   const activeStudioSource = selectedLiveTopic?.source || topics[selectedTopic].source;
@@ -250,26 +256,30 @@ export default function Home() {
         </header>
 
         {tab === 'today' && (
-          <div className="dashboard-grid">
-            <section className="main-column">
-              <div className="morning-card">
-                <div className="morning-copy"><span className="kicker">NEWS → INSTAGRAM</span><h2>Ten signals.<br />Endless content.</h2><p>Turn today’s geopolitics and Indian news into sharp Reels, save-worthy carousels, and audience-first captions.</p><button className="primary-button" onClick={() => setTab('studio')}>Create today’s post <span>↗</span></button></div>
-                <div className="orbit-art" aria-hidden="true"><span className="orbit orbit-one" /><span className="orbit orbit-two" /><span className="orbit orbit-three" /><span className="globe-dot dot-one" /><span className="globe-dot dot-two" /><strong>10</strong><small>TOPICS</small></div>
-              </div>
-              <div className="section-heading live-heading"><div><span className="live-dot" /><div><span className="section-number">LIVE · REFRESHES HOURLY</span><h3>Newest reports first</h3></div></div><button onClick={loadLiveReports}>{liveLoading ? 'Updating…' : 'Refresh now ↻'}</button></div>
-              <div className="story-list">{liveReports.length ? liveReports.slice(0, 6).map((story, index) => {
-                const related = liveReports.filter((report) => report.id !== story.id && isRelatedTopic(story, report));
-                const creatorMatch = related.find((report) => report.signal === 'creator');
-                const reachLeader = [...related, story].sort((a, b) => (b.reachScore || 0) - (a.reachScore || 0))[0];
-                return <article className="story live-story" key={story.id}><span className="story-index">{String(index + 1).padStart(2, '0')}</span><a className="story-image" aria-label={`View source for ${story.title}`} href={story.url} target="_blank" rel="noreferrer">{story.imageUrl ? <img src={story.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <span>{story.category.slice(0, 2).toUpperCase()}</span>}</a><div className="story-copy"><span className="story-tag">{story.category} · {timeAgo(story.publishedAt)}</span><h4>{story.title}</h4><p>{story.source} · Added to the hourly radar</p><div className="story-intel"><span>{related.length + 1} reports tracked</span>{creatorMatch && <a href={creatorMatch.url} target="_blank" rel="noreferrer">Creator match ↗</a>}<a href={reachLeader.url} target="_blank" rel="noreferrer">Reach signal {reachLeader.reachScore || 6}/10 ↗</a></div></div><div className="story-actions"><button className={`favorite-button ${isSaved(story) ? 'active' : ''}`} onClick={() => toggleSavedReport(story)} aria-label={isSaved(story) ? `Remove ${story.title} from planner` : `Save ${story.title} to planner`} title={isSaved(story) ? 'Saved to To-Dos' : 'Save to To-Dos'}>{isSaved(story) ? '♥' : '♡'}</button><button className="reel-button" onClick={() => buildReel(story)}>Build Reel</button><a className="story-open" aria-label={`Read ${story.title}`} href={story.url} target="_blank" rel="noreferrer">↗</a></div></article>;
-              }) : <div className="live-feed-warning"><span>{liveLoading ? 'SCANNING LIVE SOURCES' : 'LIVE FEED UNAVAILABLE'}</span><h4>{liveLoading ? 'Gathering the newest reports…' : 'Old stories have been hidden.'}</h4><p>{liveLoading ? 'This normally takes a few seconds.' : "Aman's GOAT could not verify a fresh report, so it will not show yesterday’s fallback. Try Refresh now."}</p>{liveError && <button onClick={loadLiveReports}>Try live refresh ↻</button>}</div>}</div>
+          <section className="feed-dashboard">
+            <section className="dashboard-welcome">
+              <div><span className="page-kicker">CREATOR COMMAND CENTRE</span><h2>Your day,<br />at one glance.</h2><p>Live news, content potential and today’s workload—ranked for {channelHandle}, without repeating the full News Radar.</p><div className="dashboard-welcome-actions"><button onClick={() => setTab('research')}>Explore all news <span>→</span></button><button onClick={() => setTab('studio')}>Open Content Studio <span>✦</span></button></div></div>
+              <aside className="dashboard-pulse"><div><span className="live-dot" /><strong>INTELLIGENCE LIVE</strong></div><em>{liveUpdatedAt ? `Checked ${timeAgo(liveUpdatedAt)}` : 'Connecting now'}</em><hr /><span>STRONGEST SIGNAL</span><h3>{activeFeedStory?.title || 'Gathering today’s strongest opportunity…'}</h3><small>{activeFeedStory ? `${activeFeedStory.reachScore || 7}/10 reach · ${activeFeedStory.category}` : 'Hourly radar is updating'}</small></aside>
             </section>
-            <aside className="side-column">
-              <section className="reel-counter"><div><span>REELS CREATED</span><strong>{reelsCreated}</strong><small>Saved on this device</small></div><button onClick={() => setReelsCreated((count) => count + 1)}>+ Log a Reel</button><label>Set exact total<input type="number" min="0" value={reelsCreated} onChange={(event) => setReelsCreated(Math.max(0, Number(event.target.value) || 0))} /></label></section>
-              <section className="focus-card"><div className="card-title"><span>YOUR FOCUS</span><button onClick={() => setTab('tasks')}>+  Add</button></div><div className="focus-progress"><strong>{complete}</strong><span>of {tasks.length} tasks<br />complete</span><em>{percent}%</em></div><div className="progress-track"><i style={{ width: `${percent}%` }} /></div>{tasks.slice(0, 3).map((task) => <label className={`task ${task.done ? 'done' : ''}`} key={task.id}><input type="checkbox" checked={task.done} onChange={() => toggleTask(task.id)} /><span>{task.title}</span></label>)}<button className="quiet-button" onClick={() => setTab('tasks')}>Open task planner →</button></section>
-              <section className="idea-card"><span className="kicker">TODAY’S POST IDEA</span><h3>Why India’s middle-power moment matters now</h3><p>Best format: 35-second Reel with a curiosity hook and three proof points.</p><button onClick={() => setTab('studio')}>Build this Reel ↗</button></section>
-            </aside>
-          </div>
+
+            <section className="dashboard-metrics" aria-label="Today’s dashboard metrics">
+              <button onClick={() => setTab('research')}><span>LIVE NEWS</span><strong>{myOpportunities.length}</strong><small>reports ready to explore <b>↗</b></small></button>
+              <button onClick={() => setTab('research')}><span>TOP REEL REACH</span><strong>{topReelReach || '—'}<em>{topReelReach ? '/10' : ''}</em></strong><small>highest matched video signal <b>▶</b></small></button>
+              <button onClick={() => setTab('tasks')}><span>TO-DOS</span><strong>{tasks.length}</strong><small>{pendingTasks} pending · {complete} done <b>✓</b></small></button>
+              <button onClick={() => setTab('tasks')}><span>SAVED NEWS</span><strong>{savedNewsCount}</strong><small>stories in your planner <b>♥</b></small></button>
+            </section>
+
+            <section className="top-news-dashboard">
+              <header><div><span className="page-kicker">TOP 5 OPPORTUNITIES</span><h3>Stories worth your attention.</h3></div><div><button onClick={loadLiveReports}>{liveLoading ? 'Updating…' : 'Refresh ↻'}</button><button className="full-radar-button" onClick={() => setTab('research')}>Full News Radar <span>→</span></button></div></header>
+              {activeFeedStory ? <article className="news-carousel-card">
+                <div className="news-carousel-image">{activeFeedStory.imageUrl ? <img src={activeFeedStory.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <span>{activeFeedStory.category.slice(0, 2).toUpperCase()}</span>}<div><small>RANKED OPPORTUNITY</small><strong>0{feedStoryIndex + 1}</strong></div></div>
+                <div className="news-carousel-copy"><div className="carousel-meta"><span>{activeFeedStory.category}</span><em>{timeAgo(activeFeedStory.publishedAt)}</em><b>{activeFeedStory.reachScore || 7}/10 REACH</b></div><h3>{activeFeedStory.title}</h3><p>{activeFeedStory.whyItCanTravel || 'A timely development with a clear explanation opportunity for your audience.'}</p><div className="carousel-source"><span>Source</span><strong>{activeFeedStory.source}</strong></div><div className="carousel-actions"><button className={`favorite-button ${isSaved(activeFeedStory) ? 'active' : ''}`} onClick={() => toggleSavedReport(activeFeedStory)}>{isSaved(activeFeedStory) ? '♥ Saved to planner' : '♡ Save to planner'}</button><button className="reel-button" onClick={() => buildReel(activeFeedStory)}>Build this Reel ✦</button><a href={activeFeedStory.url} target="_blank" rel="noreferrer">Read source ↗</a></div></div>
+                <div className="carousel-controls"><button onClick={() => setFeedStoryIndex((feedStoryIndex + topFeedStories.length - 1) % topFeedStories.length)} aria-label="Previous top story">←</button><div>{topFeedStories.map((story, index) => <button key={story.id} className={feedStoryIndex === index ? 'active' : ''} onClick={() => setFeedStoryIndex(index)} aria-label={`Show top story ${index + 1}`} />)}</div><span>{feedStoryIndex + 1} / {topFeedStories.length}</span><button onClick={() => setFeedStoryIndex((feedStoryIndex + 1) % topFeedStories.length)} aria-label="Next top story">→</button></div>
+              </article> : <div className="live-feed-warning"><span>{liveLoading ? 'SCANNING LIVE SOURCES' : 'LIVE FEED UNAVAILABLE'}</span><h4>{liveLoading ? 'Building your dashboard…' : 'No current report could be verified.'}</h4><p>{liveLoading ? 'The top opportunities will appear in a few seconds.' : 'Try refreshing the hourly intelligence feed.'}</p>{liveError && <button onClick={loadLiveReports}>Try live refresh ↻</button>}</div>}
+            </section>
+
+            <section className="dashboard-action-grid"><article><div className="card-title"><span>TODAY’S FOCUS</span><button onClick={() => setTab('tasks')}>Open planner →</button></div><div className="focus-progress"><strong>{percent}%</strong><span>{complete} of {tasks.length} tasks complete</span></div><div className="progress-track"><i style={{ width: `${percent}%` }} /></div>{tasks.slice(0, 3).map((task) => <label className={`task ${task.done ? 'done' : ''}`} key={task.id}><input type="checkbox" checked={task.done} onChange={() => toggleTask(task.id)} /><span>{task.title}</span></label>)}</article><article className="dashboard-create-card"><span>YOUR NEXT MOVE</span><h3>{activeFeedStory ? `Turn “${activeFeedStory.title}” into a clear Reel.` : 'Turn one strong signal into your next Reel.'}</h3><p>A story-specific hook, script beats and CTA are one click away.</p><button onClick={() => activeFeedStory ? buildReel(activeFeedStory) : setTab('studio')}>Start creating <span>→</span></button></article></section>
+          </section>
         )}
 
         {tab === 'tasks' && (
